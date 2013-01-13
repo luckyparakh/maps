@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<!-- disable iPhone inital scale -->
+<meta name="viewport" content="width=device-width; initial-scale=1.0">
+
+<title>Demo: Adaptive Design With Media Queries</title>
+
+<!-- main css -->
+<link href="places1.css" rel="stylesheet" type="text/css">
+
+<!-- media queries css -->
+<link href="media-queries.css" rel="stylesheet" type="text/css">
+
+<!--
+Internet Explorer prior than version 9 doesn't support the new elements introduced in HTML5 such as <header>, <article>, <footer>, <figure>, etc. 
+Including the html5.js Javscript file in the HTML document will enable IE to acknowledge the new elements.
+html5.js for IE less than 9 
+-->
+<!--[if lt IE 9]>
+	<script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+<![endif]-->
+
+<!--
+Internet Explorer 8 or older versions doesn't support CSS3 media queries. You can enable it by adding the css3-mediaqueries.js Javascript file.
+css3-mediaqueries.js for IE less than 9 
+-->
+<!--[if lt IE 9]>
+	<script src="http://css3-mediaqueries-js.googlecode.com/svn/trunk/css3-mediaqueries.js"></script>
+<![endif]-->
+
+</head>
+<body>
+	<div id="pagewrap">
+		<header id="header">
+			<div id="ad-one">Ad1</div>
+			<div id="site-logo">Logo</div>
+			<div id="ad-two">Ad2</div>
+		</header>
+		<div id="nav">
+			<ul>
+				<li><input id="location" type="text" placeholder="Search"name="location" size="30"/></li>
+				<li>Use Current Location<input id="cl" type="checkbox"/></li>
+				<li><input type="submit" value="Type" id="type"/></li>
+				<li><select id="radius">
+						<option disabled value="">Radius(m)</option>
+						<option selected value="500">500</option>
+						<option value="1000">1000</option>
+						<option value="1500">1500</option>
+				     </select>
+					
+				</li>
+				<li><input type="button" value="Search" onclick="find()"/></li>
+				
+			</ul>
+		</div>
+		<div id="types">
+			<input type="submit" id="checkall" name="checkall" value="checkall"><input id="uncheckall" type="submit" name="uncheckall" value="uncheckall"></br>
+			<input type="checkbox" name="types" value="airport" checked>Airport<input type="checkbox" value="atm" name="types">ATM<input type="checkbox" value="bar" name="types">Bar<input type="checkbox" value="store" name="types">store
+		</div>
+		<div id="map">
+			
+		</div>
+		<div id="msgContainer"><div id="msg"></div></div>
+		<div id="sidebar">
+			
+		</div>
+		<div id="moreButton"><button id="more">More results</button></div>
+		<footer id="footer">
+	
+			<p><a href="#">Eghaziabad.com</a></p>
+
+		</footer>
+	</div>
+</body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true&libraries=places"></script>
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script>
+	var map;
+	var infowindow;
+	// arrays to hold copies of the markers and html used by the side_bar
+	var gmarkers = [];
+	
+	var geocoder;
+	var autocomplete;
+	var lat_default=28.6328223;
+	var lng_default=77.3602056;
+	var type_default=new Array();//if send blank array to types in request variable then all type on map will be drawn
+	
+	//For checking,whatever map is laoded or not
+	var maploaded = false
+	var maploadTimer = 0
+	
+	function initialize() {
+		//fire the 'loading' message
+		checkGoogleMap();
+		
+		//Default
+		var pyrmont = new google.maps.LatLng(lat_default, lng_default);
+		// prepare Geocoder
+		geocoder = new google.maps.Geocoder();
+		//Initialize map
+		map = new google.maps.Map(document.getElementById('map'), {
+			mapTypeId: google.maps.MapTypeId.ROADMAP,
+			center: pyrmont,
+			zoom: 15
+		});
+		
+		//add the 'loaded' listener
+		google.maps.event.addListener(map, 'tilesloaded', function(){
+			maploaded = true
+		});
+		
+		//Create info window which will be displayed when click on marker
+		infowindow = new google.maps.InfoWindow();
+
+		//Add google auto complete option
+		var input = document.getElementById('location');
+		var autocomplete = new google.maps.places.Autocomplete(input);
+		//Bound autocomplete to map object
+		autocomplete.bindTo('bounds', map);
+
+		//Create googgle map Placeservice object to search nearby places
+		var service = new google.maps.places.PlacesService(map);
+		var request = {
+			location: pyrmont,
+			radius: 1000,
+			types: type_default
+		};
+		service.nearbySearch(request, callback);
+	}
+		
+
+      
+	function find(){ 
+		//Initailze by clearing marker array and sidebar    
+		document.getElementById("sidebar").innerHTML="";
+		if(gmarkers.length>0){
+			gmarkers=[];
+		}
+		//Fetch location,radius,type from html page
+		var loc = document.getElementById('location').value;
+		var rds = document.getElementById('radius').value;
+		var cl = document.getElementById('cl').checked;
+		var lat;
+		var lng;
+		var type=new Array();
+		//Putting all checked type in 'type' array which will be used by 'nearbyplaces' function.
+		$('#types input:checked').each(function(i){
+			type[i]=$(this).attr('value');
+		});
+		
+		//If current location's check box is checked
+		if(cl){
+			if (navigator.geolocation){
+				navigator.geolocation.getCurrentPosition(function(position){
+					lat=position.coords.latitude;
+					lng=position.coords.longitude;
+					nearbyPlaces(lat,lng,rds,type);
+				} ,function(error){
+				switch(error.code)
+				{
+					case error.PERMISSION_DENIED:
+						lat=lat_default;
+						lng=lng_default;
+						nearbyPlaces(lat,lng,rds,type);
+					break;
+					case error.POSITION_UNAVAILABLE:
+						alert("Location information is unavailable.");
+					break;
+					case error.TIMEOUT:
+						alert("The request to get user location timed out.");
+					break;
+					case error.UNKNOWN_ERROR:
+						alert("An unknown error occurred.")
+					break;
+				}
+				},{maximumAge:10000,timeout:10000,enableHighAccuracy:true});
+			}else{
+				alert("Geolocation is not supported by this browser.");
+				return;
+			}
+		}else{
+
+			//Call geocode function to convert address into lat long
+			if(loc!=""){
+				geocoder.geocode( { 'address': loc}, function(results, status) {
+					if (status == google.maps.GeocoderStatus.OK) {
+						//Lat/long of location
+						lat=results[0].geometry.location.lat();
+						lng=results[0].geometry.location.lng();
+						nearbyPlaces(lat,lng,rds,type);
+					}
+				});
+			}
+		}
+	}
+	     
+	function nearbyPlaces(lat,lng,rds,type){
+		//For checking,whatever map is laoded or not
+		maploaded = false
+		maploadTimer = 0
+		checkGoogleMap();
+		
+		if(typeof lat=='undefined'){
+			console.log("Undefined Cordinates");
+		}else{
+			pyrmont = new google.maps.LatLng(lat,lng);
+			map = new google.maps.Map(document.getElementById('map'), {
+			  mapTypeId: google.maps.MapTypeId.ROADMAP,
+			  center: pyrmont,
+			  zoom: 15
+			});
+		
+			request = {
+			  location: pyrmont,
+			  radius: rds,
+			  types: type
+			};
+			
+			//add the 'loaded' listener
+			google.maps.event.addListener(map, 'tilesloaded', function(){
+				maploaded = true
+			});
+			
+			service = new google.maps.places.PlacesService(map);
+			service.nearbySearch(request, callback);
+		}
+	}
+	function callback(results,status,pagination) {
+		if (status == google.maps.places.PlacesServiceStatus.OK) {
+			//If status is ok,parse each place via for loop
+			for (var i = 0; i < results.length; i++) {
+				//Grab reference id of each place which will be used by request
+				ref=results[i].reference;
+				var requestD = {
+					reference:ref
+				};
+				//Pass request array in getDetails function to get more details of a place like phone number,address etc.
+				service = new google.maps.places.PlacesService(map);
+				service.getDetails(requestD, function(placeD, status) {
+					if (status == google.maps.places.PlacesServiceStatus.OK) {
+						createMarker(placeD,gmarkers);
+					}
+				});
+			}
+			//The Google documentation states to wait 2 seconds between next page calls, hence used sleep.
+			//The pagination.nextPage() calls the same callback, in this case callback().
+			if (pagination.hasNextPage) {
+				var moreButton = document.getElementById('more');
+				moreButton.disabled = false;
+				
+				google.maps.event.addDomListenerOnce(moreButton, 'click',function() {
+					sleep:2;
+					moreButton.disabled = true;
+					pagination.nextPage();
+				});
+			}
+		}else{
+			return;
+		}
+	}
+	function createMarker(place,gmarkers) {
+		console.log(place);
+		var linkContent="";
+		var image;
+		var photos = place.photos;
+		var placeLoc = place.geometry.location;
+
+		//Find type of place and add icon image
+		types_str=place.types.join();
+		types_str=types_str.toUpperCase();
+		if(types_str.search("FOOD")>0)
+			image="icons/restaurant.png";
+		else if(types_str.search("STORE")>0)
+			image="icons/store.png";
+		else
+			image="icons/star.png";
+
+
+		if(typeof image!='undefined'){	
+			var marker = new google.maps.Marker({
+				map: map,
+				position: place.geometry.location,
+				title:place.name,
+				icon:image
+			});
+		}
+		if(typeof place.formatted_address!='undefined'){
+			linkContent+=place.formatted_address+"^";
+		}else{
+			linkContent+="NA^";
+		}
+		if(typeof place.formatted_phone_number!='undefined'){
+			linkContent+=place.formatted_phone_number+"^";
+		}else{
+			linkContent+="NA^";	
+		}
+		if(typeof place.rating!='undefined'){
+			linkContent+=place.rating+"^";
+		}else{
+			linkContent+="NA^";	
+		}
+		linkContent=linkContent.substring(0,linkContent.length-1);
+		google.maps.event.addListener(marker, 'click', function() {
+			var snap;
+			var placeContent="";
+			if(typeof place.name!='undefined')
+				placeContent=placeContent+place.name+'<br/>';
+			if(typeof place.formatted_address!='undefined'){
+				placeContent=placeContent+place.formatted_address+'<br/>';
+			}
+			if(typeof place.formatted_phone_number!='undefined'){
+				placeContent=placeContent+place.formatted_phone_number+'<br/>';
+			}
+			if(typeof place.photos!='undefined'){
+				snap='';
+				for(x in place.photos){
+					snap=snap+'<image onclick ="enlargeImage(this)" src='+photos[x].getUrl({'maxWidth': 35, 'maxHeight': 35})+'> ';
+				}
+			placeContent=placeContent+snap+'<br/>';
+			}
+
+			infowindow.setContent(placeContent);
+			infowindow.open(map, this);
+
+		});
+
+		// save the info we need to use later for the side_bar
+		gmarkers.push(marker);
+		document.getElementById("sidebar").innerHTML += '<a href="javascript:myclick(' + (gmarkers.length-1) + ')">' + place.name + '<\/a><div>'+linkContent+'</div><br>';
+	}
+	
+	// This function picks up the click action from sidebar and opens the corresponding info window in map
+	function myclick(i) {
+		google.maps.event.trigger(gmarkers[i], "click");
+	}
+	
+	//To enlarge image when they are clicked from info window
+	function enlargeImage(obj){
+		console.log(obj.src);
+	}
+	
+	//When Current location's check box is checked then location text box should be disabled
+	$('#cl').change(function(){
+		if($(this).is(':checked')){
+			$('#location').attr('readonly','readonly');
+		}else{
+			$('#location').removeAttr('readonly');
+		}
+	});
+	
+	//Check all and Uncheck all types
+	$('#checkall').on('click',function(){
+		$('#types input:checkbox').attr('checked', true);
+	});
+	//$('#uncheckall').click();
+	$('#uncheckall').on('click',function(){
+		$('#types input:checkbox').attr('checked', false);
+	});
+	
+	//Hide and Unhide types when clciked on Types button
+	$('#type').on('click',function(){
+		if($('#types').css('display')=='block'){
+			$('#types').hide("slow");
+		}else{
+			$('#types').show("slow");
+		}
+	});
+	
+	function checkGoogleMap() {
+		//increment the timer every second
+		maploadTimer = maploadTimer + 1
+		
+		//specify the target element for our messages
+		var msg = document.getElementById('msg')
+		
+		if (maploaded == false) {
+			//if we dont have a fully loaded map - show the message
+			$("#msgContainer").slideDown("fast")
+			//for the first 5 tries, show this message
+			if (maploadTimer < 5) {
+			msg.innerHTML = 'Loading...';
+			}
+			//loop it
+			setTimeout('checkGoogleMap()',1000);
+		} else {
+			//otherwise, show 'loaded' message then hide the message after a second
+			msg.innerHTML = 'Map loaded.'
+			maploadTimer = 0;
+			setTimeout('hideMsg()',1000);
+		} 
+		//if the timer get up to 20, show a different message
+		if (maploadTimer >= 20 && maploadTimer <40 ) {
+			msg.innerHTML = 'Your connection is slow.';
+		}
+		//if it gets to 40 show another different message with a reload link (for what its worth!)
+		if (maploadTimer >= 40) {
+			msg.innerHTML = 'Hmmm, still waiting! You can wait a bit longer or you could try <a href="javascript:initialize()">reloading the map</a>.';
+		}
+	}
+	
+	function hideMsg() {	
+		//$("#msgContainer").hide();
+	}
+	//Called when body loads
+	google.maps.event.addDomListener(window, 'load', initialize);
+      
+    </script>
+</html>

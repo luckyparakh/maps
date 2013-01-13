@@ -1,0 +1,22 @@
+#map {
+	height: 500px;
+}
+#sidebar{
+	height: 450px;
+	overflow:auto;
+}
+#more{
+	height: 30px;
+}
+#map img {
+ 	max-width: none;
+}
+#map-sidebar{
+	margin-top:20px;
+}
+#main-menu li{
+	padding:0px 10px;
+}
+#types_div{
+	display:none;
+}
